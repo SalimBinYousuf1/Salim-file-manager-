@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Folder Back Tab -->
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M22,34 C22,30.69 24.69,28 28,28 L44,28 C46.5,28 48.8,29.3 50,31.5 L53.5,37 L80,37 C83.31,37 86,39.69 86,43 L86,74 C86,77.31 83.31,80 80,80 L28,80 C24.69,80 22,77.31 22,74 Z" />
+    <!-- Paper sheet slipping inside -->
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M34,36 L74,36 C75.1,36 76,36.9 76,38 L76,64 L32,64 L32,38 C32,36.9 32.9,36 34,36 Z" />
+    <!-- Folder Front Cover with elegant squircle curve -->
+    <path
+        android:fillColor="#60A5FA"
+        android:pathData="M22,46 C22,42.69 24.69,40 28,40 L80,40 C83.31,40 86,42.69 86,46 L86,74 C86,77.31 83.31,80 80,80 L28,80 C24.69,80 22,77.31 22,74 Z" />
+</vector>

@@ -10,6 +10,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.example.data.repository.AppThemeSetting
 
 private val DarkColorScheme = darkColorScheme(
     primary = SalimPrimaryDark,
@@ -57,6 +58,27 @@ private val LightColorScheme = lightColorScheme(
     onErrorContainer = SalimOnErrorContainerLight,
 )
 
+private val AsglColorScheme = darkColorScheme(
+    primary = AsglPrimary,
+    onPrimary = AsglOnPrimary,
+    primaryContainer = AsglDeepBlue,
+    onPrimaryContainer = Color.White,
+    secondary = AsglDeepGreen,
+    onSecondary = Color.White,
+    secondaryContainer = AsglDeepYellow,
+    onSecondaryContainer = Color.Black,
+    tertiary = AsglDeepRed,
+    onTertiary = Color.White,
+    background = AsglBackground,
+    onBackground = AsglOnBackground,
+    surface = AsglSurface,
+    onSurface = AsglOnSurface,
+    surfaceVariant = AsglSurfaceVariant,
+    onSurfaceVariant = AsglOnSurfaceVariant,
+    error = AsglDeepRed,
+    onError = Color.White,
+)
+
 private val HighContrastDarkColorScheme = darkColorScheme(
     primary = Color(0xFF93C5FD),
     onPrimary = Color.Black,
@@ -85,15 +107,34 @@ private val HighContrastLightColorScheme = lightColorScheme(
 
 @Composable
 fun SalimTheme(
+    themeSetting: AppThemeSetting = AppThemeSetting.SYSTEM,
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     highContrast: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    MyApplicationTheme(
-        darkTheme = darkTheme,
-        dynamicColor = dynamicColor,
-        highContrast = highContrast,
+    val isDark = when (themeSetting) {
+        AppThemeSetting.SYSTEM -> darkTheme
+        AppThemeSetting.LIGHT -> false
+        AppThemeSetting.DARK -> true
+        AppThemeSetting.ASGL -> true
+    }
+
+    val colorScheme = when {
+        highContrast && isDark -> HighContrastDarkColorScheme
+        highContrast && !isDark -> HighContrastLightColorScheme
+        themeSetting == AppThemeSetting.ASGL -> AsglColorScheme
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            val context = LocalContext.current
+            if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        isDark -> DarkColorScheme
+        else -> LightColorScheme
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography,
         content = content
     )
 }
@@ -101,24 +142,15 @@ fun SalimTheme(
 @Composable
 fun MyApplicationTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // Default false to keep Salim's crisp signature identity
+    dynamicColor: Boolean = false,
     highContrast: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = when {
-        highContrast && darkTheme -> HighContrastDarkColorScheme
-        highContrast && !darkTheme -> HighContrastLightColorScheme
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
+    SalimTheme(
+        themeSetting = if (darkTheme) AppThemeSetting.DARK else AppThemeSetting.LIGHT,
+        darkTheme = darkTheme,
+        dynamicColor = dynamicColor,
+        highContrast = highContrast,
         content = content
     )
 }

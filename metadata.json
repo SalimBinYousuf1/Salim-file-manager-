@@ -1,6 +1,6 @@
 {
-  "name": "Salim",
-  "description": "Salim is a fluid, modern Android file manager featuring precise touch mechanics, real storage analysis, duplicate and large file detection, trash recovery, archive handling, and comprehensive settings.",
+  "name": "Salim Files",
+  "description": "Salim Files is a production-ready Android file manager featuring Apple-quality mobile UI/UX, true white-first and OLED dark design, ASGL atmospheric shader theme, tactile gestures, real storage analytics, and comprehensive file management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

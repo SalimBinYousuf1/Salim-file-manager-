@@ -13,11 +13,14 @@ import org.json.JSONObject
 enum class AppThemeSetting {
     SYSTEM,
     LIGHT,
-    DARK
+    DARK,
+    ASGL
 }
 
 data class SalimSettings(
     val theme: AppThemeSetting = AppThemeSetting.SYSTEM,
+    val glassTransparency: Float = 0.75f, // 0.40 (near-clear), 0.75 (balanced), 0.92 (near-opaque)
+    val reduceTransparency: Boolean = false, // If true, fall back to solid surfaces
     val defaultSortField: SortField = SortField.NAME,
     val defaultSortAscending: Boolean = true,
     val foldersAlwaysFirst: Boolean = true,
@@ -43,6 +46,8 @@ class SettingsRepository(private val context: Context) {
     private fun loadSettings(): SalimSettings {
         return SalimSettings(
             theme = try { AppThemeSetting.valueOf(prefs.getString("theme", AppThemeSetting.SYSTEM.name) ?: AppThemeSetting.SYSTEM.name) } catch (e: Exception) { AppThemeSetting.SYSTEM },
+            glassTransparency = prefs.getFloat("glass_transparency", 0.75f).coerceIn(0.2f, 0.98f),
+            reduceTransparency = prefs.getBoolean("reduce_transparency", false),
             defaultSortField = try { SortField.valueOf(prefs.getString("sort_field", SortField.NAME.name) ?: SortField.NAME.name) } catch (e: Exception) { SortField.NAME },
             defaultSortAscending = prefs.getBoolean("sort_ascending", true),
             foldersAlwaysFirst = prefs.getBoolean("folders_first", true),
@@ -63,6 +68,17 @@ class SettingsRepository(private val context: Context) {
     fun updateTheme(theme: AppThemeSetting) {
         prefs.edit().putString("theme", theme.name).apply()
         _settings.value = _settings.value.copy(theme = theme)
+    }
+
+    fun updateGlassTransparency(transparency: Float) {
+        val clamped = transparency.coerceIn(0.2f, 0.98f)
+        prefs.edit().putFloat("glass_transparency", clamped).apply()
+        _settings.value = _settings.value.copy(glassTransparency = clamped)
+    }
+
+    fun updateReduceTransparency(reduce: Boolean) {
+        prefs.edit().putBoolean("reduce_transparency", reduce).apply()
+        _settings.value = _settings.value.copy(reduceTransparency = reduce)
     }
 
     fun updateDefaultSort(field: SortField, ascending: Boolean) {
@@ -146,6 +162,8 @@ class SettingsRepository(private val context: Context) {
             put("showHiddenFiles", s.showHiddenFiles)
             put("reduceMotion", s.reduceMotion)
             put("highContrast", s.highContrast)
+            put("glassTransparency", s.glassTransparency.toDouble())
+            put("reduceTransparency", s.reduceTransparency)
             put("textSizeMultiplier", s.textSizeMultiplier.toDouble())
         }
         return json.toString(2)
@@ -155,6 +173,8 @@ class SettingsRepository(private val context: Context) {
         return try {
             val json = JSONObject(jsonStr)
             if (json.has("theme")) updateTheme(AppThemeSetting.valueOf(json.getString("theme")))
+            if (json.has("glassTransparency")) updateGlassTransparency(json.getDouble("glassTransparency").toFloat())
+            if (json.has("reduceTransparency")) updateReduceTransparency(json.getBoolean("reduceTransparency"))
             if (json.has("defaultSortField")) {
                 val field = SortField.valueOf(json.getString("defaultSortField"))
                 val asc = json.optBoolean("defaultSortAscending", true)

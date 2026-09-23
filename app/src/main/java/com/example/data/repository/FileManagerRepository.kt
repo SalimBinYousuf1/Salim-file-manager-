@@ -855,4 +855,130 @@ class FileManagerRepository(
     }
 
     fun getPrivateVaultFolder(): File = privateVaultDir
+
+    suspend fun getLocationsSummary(): List<LocationSummaryData> = withContext(Dispatchers.IO) {
+        val root = getRootDirectory()
+        val totalSpace = root.totalSpace.coerceAtLeast(1024L * 1024L * 1024L)
+        val freeSpace = root.freeSpace
+        val usedSpace = (totalSpace - freeSpace).coerceAtLeast(0L)
+        val storageSubtitle = "${FileItem.formatFileSize(usedSpace)} used · ${FileItem.formatFileSize(freeSpace)} free"
+
+        fun countItems(vararg dirs: File): Int {
+            return dirs.filter { it.exists() && it.canRead() }
+                .sumOf { it.listFiles()?.size ?: 0 }
+        }
+
+        fun findFolder(name: String, altName: String = name): File {
+            val f1 = File(root, name)
+            if (f1.exists()) return f1
+            val f2 = File(root, altName)
+            if (f2.exists()) return f2
+            val pub = Environment.getExternalStoragePublicDirectory(name)
+            if (pub != null && pub.exists()) return pub
+            return f1.apply { mkdirs() }
+        }
+
+        val downloadsFolder = findFolder("Download", "Downloads")
+        val documentsFolder = findFolder("Documents", "Document")
+        val picturesFolder = findFolder("Pictures", "DCIM")
+        val moviesFolder = findFolder("Movies", "DCIM")
+        val musicFolder = findFolder("Music", "Audio")
+
+        val downloadsCount = countItems(downloadsFolder)
+        val docsCount = countItems(documentsFolder)
+        val imagesCount = countItems(picturesFolder, File(root, "DCIM"))
+        val videosCount = countItems(moviesFolder)
+        val audioCount = countItems(musicFolder)
+
+        listOf(
+            LocationSummaryData(
+                id = "storage",
+                title = "Internal Storage",
+                subtitle = storageSubtitle,
+                targetFile = root,
+                type = LocationType.INTERNAL_STORAGE
+            ),
+            LocationSummaryData(
+                id = "downloads",
+                title = "Downloads",
+                subtitle = if (downloadsCount == 1) "1 item" else "$downloadsCount items",
+                targetFile = downloadsFolder,
+                type = LocationType.DOWNLOADS
+            ),
+            LocationSummaryData(
+                id = "documents",
+                title = "Documents",
+                subtitle = if (docsCount == 1) "1 item" else "$docsCount items",
+                targetFile = documentsFolder,
+                type = LocationType.DOCUMENTS
+            ),
+            LocationSummaryData(
+                id = "images",
+                title = "Images",
+                subtitle = if (imagesCount == 1) "1 item" else "$imagesCount items",
+                targetFile = picturesFolder,
+                type = LocationType.IMAGES
+            ),
+            LocationSummaryData(
+                id = "videos",
+                title = "Videos",
+                subtitle = if (videosCount == 1) "1 item" else "$videosCount items",
+                targetFile = moviesFolder,
+                type = LocationType.VIDEOS
+            ),
+            LocationSummaryData(
+                id = "audio",
+                title = "Audio",
+                subtitle = if (audioCount == 1) "1 item" else "$audioCount items",
+                targetFile = musicFolder,
+                type = LocationType.AUDIO
+            )
+        )
+    }
+
+    suspend fun getRecentFiles(limit: Int = 8): List<FileItem> = withContext(Dispatchers.IO) {
+        val root = getRootDirectory()
+        val allFiles = mutableListOf<File>()
+
+        fun scan(dir: File, depth: Int = 0) {
+            if (depth > 4) return
+            val children = dir.listFiles() ?: return
+            for (c in children) {
+                if (c.name.startsWith(".") || c.name == "salim_trash" || c.name == "salim_vault") continue
+                if (c.isFile) {
+                    allFiles.add(c)
+                } else if (c.isDirectory && depth < 3) {
+                    scan(c, depth + 1)
+                }
+            }
+        }
+
+        scan(root)
+        allFiles.sortedByDescending { it.lastModified() }
+            .take(limit)
+            .map {
+                FileItem(
+                    file = it,
+                    mimeType = FileUtils.getMimeType(it),
+                    readableType = FileUtils.getReadableTypeName(it)
+                )
+            }
+    }
 }
+
+enum class LocationType {
+    INTERNAL_STORAGE,
+    DOWNLOADS,
+    DOCUMENTS,
+    IMAGES,
+    VIDEOS,
+    AUDIO
+}
+
+data class LocationSummaryData(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val targetFile: File,
+    val type: LocationType
+)

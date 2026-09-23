@@ -100,14 +100,7 @@ fun SalimCrudBottomSheet(
                 onClick = { onDismiss(); onMove(fileItem) }
             )
 
-            // 5. Compress
-            CrudMenuItem(
-                icon = Icons.Default.FolderZip,
-                title = "Compress to .zip",
-                onClick = { onDismiss(); onCompress(fileItem) }
-            )
-
-            // 6. Share
+            // 5. Share
             if (!fileItem.isDirectory) {
                 CrudMenuItem(
                     icon = Icons.Default.Share,
@@ -115,6 +108,13 @@ fun SalimCrudBottomSheet(
                     onClick = { onDismiss(); onShare(fileItem) }
                 )
             }
+
+            // 6. Compress
+            CrudMenuItem(
+                icon = Icons.Default.FolderZip,
+                title = "Compress to .zip",
+                onClick = { onDismiss(); onCompress(fileItem) }
+            )
 
             // 7. Add to Bookmarks / Favorites
             CrudMenuItem(

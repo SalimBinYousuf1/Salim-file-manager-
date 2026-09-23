@@ -14,6 +14,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -21,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -44,7 +46,9 @@ import com.example.ui.screens.storage.LargeFileFinderScreen
 import com.example.ui.screens.storage.StorageScreen
 import com.example.ui.screens.trash.TrashScreen
 import com.example.ui.screens.vault.PrivateVaultScreen
+import com.example.ui.theme.AsglAtmosphereBackground
 import com.example.ui.theme.SalimTheme
+import com.example.ui.theme.liquidGlass
 import java.io.File
 
 enum class SalimTab(
@@ -90,13 +94,23 @@ class MainActivity : ComponentActivity() {
                 AppThemeSetting.SYSTEM -> isSystemInDarkTheme()
                 AppThemeSetting.LIGHT -> false
                 AppThemeSetting.DARK -> true
+                AppThemeSetting.ASGL -> true
             }
 
-            SalimTheme(darkTheme = isDark) {
-                SalimMainApp(
-                    repository = fileManagerRepository,
-                    settingsRepository = settingsRepository
-                )
+            SalimTheme(
+                themeSetting = settings.theme,
+                darkTheme = isDark,
+                highContrast = settings.highContrast
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (settings.theme == AppThemeSetting.ASGL) {
+                        AsglAtmosphereBackground()
+                    }
+                    SalimMainApp(
+                        repository = fileManagerRepository,
+                        settingsRepository = settingsRepository
+                    )
+                }
             }
         }
     }
@@ -108,6 +122,7 @@ fun SalimMainApp(
     settingsRepository: SettingsRepository
 ) {
     val context = LocalContext.current
+    val settings by settingsRepository.settings.collectAsState()
     var currentTab by remember { mutableStateOf(SalimTab.BROWSE) }
     var currentSubScreen by remember { mutableStateOf<SubScreen>(SubScreen.None) }
 
@@ -141,6 +156,7 @@ fun SalimMainApp(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        containerColor = if (settings.theme == AppThemeSetting.ASGL) Color.Transparent else MaterialTheme.colorScheme.background,
         bottomBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 // Persistent Operation Progress Bar
@@ -150,9 +166,23 @@ fun SalimMainApp(
                 )
 
                 if (currentSubScreen is SubScreen.None) {
+                    val isGlassTheme = settings.theme == AppThemeSetting.ASGL || !settings.reduceTransparency
                     NavigationBar(
-                        modifier = Modifier.testTag("salim_bottom_nav"),
-                        containerColor = MaterialTheme.colorScheme.surface
+                        modifier = Modifier
+                            .testTag("salim_bottom_nav")
+                            .then(
+                                if (settings.theme == AppThemeSetting.ASGL) {
+                                    Modifier.liquidGlass(
+                                        shape = RoundedCornerShape(0.dp),
+                                        transparency = settings.glassTransparency,
+                                        reduceTransparency = settings.reduceTransparency,
+                                        isDarkOrAsgl = true
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            ),
+                        containerColor = if (settings.theme == AppThemeSetting.ASGL) Color.Transparent else MaterialTheme.colorScheme.surface
                     ) {
                         SalimTab.values().forEach { tab ->
                             val isSelected = currentTab == tab
@@ -304,6 +334,18 @@ fun SalimMainApp(
                                     canGoBack = folderBackStack.size > 1,
                                     onOpenSettings = {
                                         currentSubScreen = SubScreen.Settings
+                                    },
+                                    onOpenBookmarks = {
+                                        currentSubScreen = SubScreen.Bookmarks
+                                    },
+                                    onOpenTrash = {
+                                        currentTab = SalimTab.TRASH
+                                    },
+                                    onOpenVault = {
+                                        currentSubScreen = SubScreen.Vault
+                                    },
+                                    onOpenNetwork = {
+                                        currentSubScreen = SubScreen.Network
                                     }
                                 )
                             }

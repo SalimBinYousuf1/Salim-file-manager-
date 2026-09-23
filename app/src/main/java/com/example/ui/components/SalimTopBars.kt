@@ -160,6 +160,55 @@ fun SalimBrowseTopBar(
     )
 }
 
+@Composable
+fun SalimBreadcrumbRow(
+    currentFolder: java.io.File,
+    rootFolder: java.io.File,
+    onNavigateTo: (java.io.File) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val segments = remember(currentFolder, rootFolder) {
+        val list = mutableListOf<java.io.File>()
+        var curr: java.io.File? = currentFolder
+        while (curr != null) {
+            list.add(0, curr)
+            if (curr.absolutePath == rootFolder.absolutePath) break
+            curr = curr.parentFile
+        }
+        list
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        segments.forEachIndexed { index, file ->
+            val isLast = index == segments.lastIndex
+            val label = if (file.absolutePath == rootFolder.absolutePath) "Storage" else file.name
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
+                    color = if (isLast) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier
+                    .padding(vertical = 4.dp, horizontal = 2.dp)
+            )
+            if (!isLast) {
+                Text(
+                    text = " › ",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(horizontal = 2.dp)
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SalimSelectionTopBar(

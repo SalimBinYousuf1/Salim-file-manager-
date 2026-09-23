@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +16,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -31,18 +35,22 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.local.BookmarkEntity
 import com.example.data.model.*
 import com.example.data.repository.FileManagerRepository
+import com.example.data.repository.LocationSummaryData
+import com.example.data.repository.LocationType
 import com.example.data.repository.SettingsRepository
 import com.example.data.util.FileUtils
 import com.example.ui.components.*
+import com.example.ui.theme.*
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.io.File
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseScreen(
     repository: FileManagerRepository,
@@ -52,6 +60,10 @@ fun BrowseScreen(
     onNavigateUp: () -> Unit,
     canGoBack: Boolean,
     onOpenSettings: () -> Unit,
+    onOpenBookmarks: (() -> Unit)? = null,
+    onOpenTrash: (() -> Unit)? = null,
+    onOpenVault: (() -> Unit)? = null,
+    onOpenNetwork: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -60,6 +72,10 @@ fun BrowseScreen(
 
     var files by remember { mutableStateOf<List<FileItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+
+    // Locations summary and Recent files for the Root "Files" Screen (Section 46, 47, 48)
+    var locationSummaries by remember { mutableStateOf<List<LocationSummaryData>>(emptyList()) }
+    var recentFiles by remember { mutableStateOf<List<FileItem>>(emptyList()) }
 
     // Search state
     var isSearchActive by remember { mutableStateOf(false) }
@@ -94,21 +110,27 @@ fun BrowseScreen(
     var itemToRename by remember { mutableStateOf<FileItem?>(null) }
     var renameInput by remember { mutableStateOf(TextFieldValue("")) }
 
-    // Bookmarks tracking
+    // Bookmarks & Trash tracking
     val bookmarksList by repository.bookmarks.collectAsState(initial = emptyList())
+    val trashList by repository.trashItems.collectAsState(initial = emptyList())
     val bookmarkedPaths = remember(bookmarksList) { bookmarksList.map { it.path }.toSet() }
 
-    // Load files
+    // Refresh data
     fun refreshFiles() {
         coroutineScope.launch {
             isLoading = true
             currentSortPref = repository.getFolderSortPreference(currentFolder.absolutePath)
             files = repository.listFiles(currentFolder)
+
+            if (!canGoBack) {
+                locationSummaries = repository.getLocationsSummary()
+                recentFiles = repository.getRecentFiles(8)
+            }
             isLoading = false
         }
     }
 
-    LaunchedEffect(currentFolder, settings.showHiddenFiles) {
+    LaunchedEffect(currentFolder, settings.showHiddenFiles, canGoBack) {
         refreshFiles()
     }
 
@@ -184,7 +206,7 @@ fun BrowseScreen(
                 )
             } else {
                 SalimBrowseTopBar(
-                    title = if (currentFolder == repository.getRootDirectory()) "Salim Files" else currentFolder.name,
+                    title = if (!canGoBack) "Files" else currentFolder.name,
                     canGoBack = canGoBack,
                     onBackClick = onNavigateUp,
                     onSearchClick = { isSearchActive = true },
@@ -224,7 +246,7 @@ fun BrowseScreen(
                 .padding(paddingValues)
         ) {
             if (isSearchActive) {
-                // Search Results / Recent Searches View
+                // Search View
                 if (searchQuery.isBlank()) {
                     Column(
                         modifier = Modifier
@@ -320,12 +342,144 @@ fun BrowseScreen(
                         }
                     }
                 }
+            } else if (!canGoBack && !isSelectionMode) {
+                // Main Mobile Interface (Sections 46, 47, 48 - No dashboard feel, clean Apple-grade utility)
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("salim_main_files_screen")
+                ) {
+                    // Section: Locations
+                    item {
+                        Text(
+                            text = "Locations",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
+                        )
+                    }
+
+                    items(locationSummaries, key = { it.id }) { loc ->
+                        LocationRowItem(
+                            location = loc,
+                            onClick = { onNavigateToFolder(loc.targetFile) }
+                        )
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(start = 56.dp)
+                        )
+                    }
+
+                    // Section: Recent Files (Section 46)
+                    if (recentFiles.isNotEmpty()) {
+                        item {
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                text = "Recent",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                        }
+
+                        items(recentFiles, key = { it.path }) { item ->
+                            FileRowItem(
+                                fileItem = item,
+                                isSelectionMode = false,
+                                isSelected = false,
+                                onTap = {
+                                    if (item.isDirectory) onNavigateToFolder(item.file) else FileUtils.openFile(context, item.file)
+                                },
+                                onLongPress1150ms = { activeCrudItem = item },
+                                onLongPressDragSelect = {
+                                    isSelectionMode = true
+                                    selectedFiles.add(item)
+                                },
+                                onRename = {
+                                    itemToRename = item
+                                    renameInput = TextFieldValue(item.name)
+                                },
+                                onMove = {
+                                    filesToTransfer = listOf(item.file)
+                                    folderPickerOperation = "move"
+                                },
+                                onDelete = {
+                                    itemToDeleteWithConfirm = item
+                                    if (settings.confirmBeforeDelete) showDeleteConfirmDialog = true
+                                    else {
+                                        coroutineScope.launch {
+                                            repository.moveToTrash(item.file)
+                                            refreshFiles()
+                                        }
+                                    }
+                                }
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        }
+                    }
+
+                    // Section: Favorites & Quick Shortcuts
+                    item {
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = "Favorites & Shortcuts",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+
+                        ShortcutRowItem(
+                            title = "Bookmarks",
+                            subtitle = if (bookmarksList.size == 1) "1 item" else "${bookmarksList.size} items",
+                            icon = Icons.Default.Bookmark,
+                            iconTint = ColorFolder,
+                            onClick = { onOpenBookmarks?.invoke() }
+                        )
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(start = 56.dp)
+                        )
+
+                        ShortcutRowItem(
+                            title = "Trash",
+                            subtitle = if (trashList.size == 1) "1 item" else "${trashList.size} items",
+                            icon = Icons.Default.Delete,
+                            iconTint = MaterialTheme.colorScheme.error,
+                            onClick = { onOpenTrash?.invoke() }
+                        )
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(start = 56.dp)
+                        )
+
+                        ShortcutRowItem(
+                            title = "Private Vault",
+                            subtitle = "Encrypted local folder",
+                            icon = Icons.Default.Lock,
+                            iconTint = ColorImage,
+                            onClick = { onOpenVault?.invoke() }
+                        )
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(start = 56.dp)
+                        )
+
+                        ShortcutRowItem(
+                            title = "Network Storage",
+                            subtitle = "SMB, FTP, SFTP, WebDAV",
+                            icon = Icons.Default.Dns,
+                            iconTint = ColorDocument,
+                            onClick = { onOpenNetwork?.invoke() }
+                        )
+                        Spacer(Modifier.height(24.dp))
+                    }
+                }
             } else if (isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             } else if (files.isEmpty() && !inlineCreatingFolder && !inlineCreatingFile) {
-                // Empty state (Part M)
+                // Empty state (Part M, Section 33)
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -364,157 +518,156 @@ fun BrowseScreen(
                     }
                 }
             } else {
-                // Regular File Listing (List or Grid)
-                if (settings.defaultViewMode == ViewMode.LIST) {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        // Inline Folder Creation Row
-                        if (inlineCreatingFolder) {
-                            item {
-                                InlineCreationRow(
-                                    icon = Icons.Default.Folder,
-                                    label = "Folder name",
-                                    value = inlineNameInput,
-                                    onValueChange = { inlineNameInput = it },
-                                    onCommit = {
-                                        val name = inlineNameInput.text.trim()
-                                        if (name.isNotBlank()) {
-                                            coroutineScope.launch {
-                                                repository.createFolder(currentFolder, name)
+                // Inside Folder: Regular File Listing (Section 49, 50)
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Breadcrumb navigation row
+                    SalimBreadcrumbRow(
+                        currentFolder = currentFolder,
+                        rootFolder = repository.getRootDirectory(),
+                        onNavigateTo = onNavigateToFolder
+                    )
+
+                    if (settings.defaultViewMode == ViewMode.LIST) {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            // Inline Folder Creation Row
+                            if (inlineCreatingFolder) {
+                                item {
+                                    InlineCreationRow(
+                                        icon = Icons.Default.Folder,
+                                        label = "Folder name",
+                                        value = inlineNameInput,
+                                        onValueChange = { inlineNameInput = it },
+                                        onCommit = {
+                                            val name = inlineNameInput.text.trim()
+                                            if (name.isNotBlank()) {
+                                                coroutineScope.launch {
+                                                    repository.createFolder(currentFolder, name)
+                                                    inlineCreatingFolder = false
+                                                    refreshFiles()
+                                                }
+                                            } else {
                                                 inlineCreatingFolder = false
-                                                refreshFiles()
                                             }
-                                        } else {
-                                            inlineCreatingFolder = false
-                                        }
-                                    },
-                                    onCancel = { inlineCreatingFolder = false }
-                                )
-                                HorizontalDivider()
-                            }
-                        }
-
-                        // Inline File Creation Row
-                        if (inlineCreatingFile) {
-                            item {
-                                InlineCreationRow(
-                                    icon = Icons.Default.Article,
-                                    label = "File name (.txt)",
-                                    value = inlineNameInput,
-                                    onValueChange = { inlineNameInput = it },
-                                    onCommit = {
-                                        val name = inlineNameInput.text.trim()
-                                        if (name.isNotBlank()) {
-                                            coroutineScope.launch {
-                                                repository.createTextFile(currentFolder, name)
-                                                inlineCreatingFile = false
-                                                refreshFiles()
-                                            }
-                                        } else {
-                                            inlineCreatingFile = false
-                                        }
-                                    },
-                                    onCancel = { inlineCreatingFile = false }
-                                )
-                                HorizontalDivider()
-                            }
-                        }
-
-                        items(files, key = { it.path }) { item ->
-                            val isSelected = selectedFiles.contains(item)
-                            FileRowItem(
-                                fileItem = item,
-                                isSelectionMode = isSelectionMode,
-                                isSelected = isSelected,
-                                onTap = {
-                                    if (isSelectionMode) {
-                                        if (isSelected) selectedFiles.remove(item) else selectedFiles.add(item)
-                                    } else {
-                                        if (item.isDirectory) onNavigateToFolder(item.file)
-                                        else FileUtils.openFile(context, item.file)
-                                    }
-                                },
-                                onLongPress1150ms = {
-                                    if (!isSelectionMode) activeCrudItem = item
-                                },
-                                onLongPressDragSelect = {
-                                    if (!isSelectionMode) {
-                                        isSelectionMode = true
-                                        selectedFiles.add(item)
-                                    }
-                                },
-                                onRename = {
-                                    itemToRename = item
-                                    val stem = if (item.file.isFile && item.file.extension.isNotEmpty()) item.file.nameWithoutExtension else item.name
-                                    renameInput = TextFieldValue(
-                                        text = item.name,
-                                        selection = TextRange(0, stem.length)
+                                        },
+                                        onCancel = { inlineCreatingFolder = false }
                                     )
-                                },
-                                onMove = {
-                                    filesToTransfer = listOf(item.file)
-                                    folderPickerOperation = "move"
-                                },
-                                onDelete = {
-                                    itemToDeleteWithConfirm = item
-                                    if (settings.confirmBeforeDelete) showDeleteConfirmDialog = true
-                                    else {
-                                        coroutineScope.launch {
-                                            repository.moveToTrash(item.file)
-                                            refreshFiles()
-                                            Toast.makeText(context, "Moved to Trash", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+
+                            // Inline Text File Creation Row
+                            if (inlineCreatingFile) {
+                                item {
+                                    InlineCreationRow(
+                                        icon = Icons.Default.Description,
+                                        label = "File name (e.g. notes.txt)",
+                                        value = inlineNameInput,
+                                        onValueChange = { inlineNameInput = it },
+                                        onCommit = {
+                                            val name = inlineNameInput.text.trim()
+                                            if (name.isNotBlank()) {
+                                                coroutineScope.launch {
+                                                    repository.createTextFile(currentFolder, name, "")
+                                                    inlineCreatingFile = false
+                                                    refreshFiles()
+                                                }
+                                            } else {
+                                                inlineCreatingFile = false
+                                            }
+                                        },
+                                        onCancel = { inlineCreatingFile = false }
+                                    )
+                                }
+                            }
+
+                            items(files, key = { it.path }) { item ->
+                                val isSelected = selectedFiles.contains(item)
+                                FileRowItem(
+                                    fileItem = item,
+                                    isSelectionMode = isSelectionMode,
+                                    isSelected = isSelected,
+                                    onTap = {
+                                        if (isSelectionMode) {
+                                            if (isSelected) selectedFiles.remove(item) else selectedFiles.add(item)
+                                        } else {
+                                            if (item.isDirectory) onNavigateToFolder(item.file)
+                                            else FileUtils.openFile(context, item.file)
+                                        }
+                                    },
+                                    onLongPress1150ms = {
+                                        if (!isSelectionMode) activeCrudItem = item
+                                    },
+                                    onLongPressDragSelect = {
+                                        if (!isSelectionMode) {
+                                            isSelectionMode = true
+                                            selectedFiles.add(item)
+                                        }
+                                    },
+                                    onRename = {
+                                        itemToRename = item
+                                        renameInput = TextFieldValue(item.name)
+                                    },
+                                    onMove = {
+                                        filesToTransfer = listOf(item.file)
+                                        folderPickerOperation = "move"
+                                    },
+                                    onDelete = {
+                                        itemToDeleteWithConfirm = item
+                                        if (settings.confirmBeforeDelete) showDeleteConfirmDialog = true
+                                        else {
+                                            coroutineScope.launch {
+                                                repository.moveToTrash(item.file)
+                                                refreshFiles()
+                                            }
                                         }
                                     }
-                                }
-                            )
-                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            }
                         }
-                    }
-                } else {
-                    // Grid View with 2-6 pinch scaling
-                    val columns = settings.gridColumns.coerceIn(2, 6)
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(columns),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 8.dp, vertical = 8.dp)
-                            .pointerInput(Unit) {
-                                detectTransformGestures { _, _, zoom, _ ->
-                                    if (zoom != 1f) {
-                                        val target = if (zoom > 1.05f) columns - 1 else if (zoom < 0.95f) columns + 1 else columns
-                                        val clamped = target.coerceIn(2, 6)
-                                        if (clamped != columns) {
-                                            settingsRepository.updateGridColumns(clamped)
+                    } else {
+                        // Grid View with Pinch Column Count interpolation (Part A & Section 49)
+                        val cols = gridColumns.toInt().coerceIn(2, 6)
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(cols),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 8.dp)
+                                .pointerInput(Unit) {
+                                    detectTransformGestures { _, _, zoom, _ ->
+                                        if (zoom > 1.05f && gridColumns > 2f) {
+                                            gridColumns = (gridColumns - 0.05f).coerceAtLeast(2f)
+                                        } else if (zoom < 0.95f && gridColumns < 6f) {
+                                            gridColumns = (gridColumns + 0.05f).coerceAtMost(6f)
                                         }
                                     }
-                                }
-                            },
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(files, key = { it.path }) { item ->
-                            val isSelected = selectedFiles.contains(item)
-                            FileGridItem(
-                                fileItem = item,
-                                isSelectionMode = isSelectionMode,
-                                isSelected = isSelected,
-                                onTap = {
-                                    if (isSelectionMode) {
-                                        if (isSelected) selectedFiles.remove(item) else selectedFiles.add(item)
-                                    } else {
-                                        if (item.isDirectory) onNavigateToFolder(item.file)
-                                        else FileUtils.openFile(context, item.file)
-                                    }
                                 },
-                                onLongPress1150ms = {
-                                    if (!isSelectionMode) activeCrudItem = item
-                                },
-                                onLongPressDragSelect = {
-                                    if (!isSelectionMode) {
-                                        isSelectionMode = true
-                                        selectedFiles.add(item)
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            items(files, key = { it.path }) { item ->
+                                val isSelected = selectedFiles.contains(item)
+                                FileGridItem(
+                                    fileItem = item,
+                                    isSelectionMode = isSelectionMode,
+                                    isSelected = isSelected,
+                                    onTap = {
+                                        if (isSelectionMode) {
+                                            if (isSelected) selectedFiles.remove(item) else selectedFiles.add(item)
+                                        } else {
+                                            if (item.isDirectory) onNavigateToFolder(item.file)
+                                            else FileUtils.openFile(context, item.file)
+                                        }
+                                    },
+                                    onLongPress1150ms = {
+                                        if (!isSelectionMode) activeCrudItem = item
+                                    },
+                                    onLongPressDragSelect = {
+                                        if (!isSelectionMode) {
+                                            isSelectionMode = true
+                                            selectedFiles.add(item)
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
@@ -753,6 +906,114 @@ fun BrowseScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+}
+
+@Composable
+fun LocationRowItem(
+    location: LocationSummaryData,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val icon = when (location.type) {
+        LocationType.INTERNAL_STORAGE -> Icons.Default.PhoneAndroid
+        LocationType.DOWNLOADS -> Icons.Default.Download
+        LocationType.DOCUMENTS -> Icons.Default.Description
+        LocationType.IMAGES -> Icons.Default.Image
+        LocationType.VIDEOS -> Icons.Default.Videocam
+        LocationType.AUDIO -> Icons.Default.Audiotrack
+    }
+    val iconTint = when (location.type) {
+        LocationType.INTERNAL_STORAGE -> ColorFolder
+        LocationType.DOWNLOADS -> ColorArchive
+        LocationType.DOCUMENTS -> ColorDocument
+        LocationType.IMAGES -> ColorImage
+        LocationType.VIDEOS -> ColorVideo
+        LocationType.AUDIO -> ColorAudio
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = location.title,
+            tint = iconTint,
+            modifier = Modifier.size(28.dp)
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = location.title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = location.subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+            modifier = Modifier.size(14.dp)
+        )
+    }
+}
+
+@Composable
+fun ShortcutRowItem(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconTint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = title,
+            tint = iconTint,
+            modifier = Modifier.size(28.dp)
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+            modifier = Modifier.size(14.dp)
         )
     }
 }

@@ -22,12 +22,13 @@ import androidx.compose.ui.unit.dp
 import com.example.data.model.FileItem
 import com.example.data.model.SortField
 import com.example.data.model.ViewMode
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import com.example.data.repository.AppThemeSetting
 import com.example.data.repository.FileManagerRepository
 import com.example.data.repository.SettingsRepository
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     repository: FileManagerRepository,
@@ -81,18 +82,61 @@ fun SettingsScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Theme", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
                     Spacer(Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        AppThemeSetting.values().forEach { themeOption ->
+                            val label = when (themeOption) {
+                                AppThemeSetting.SYSTEM -> "System"
+                                AppThemeSetting.LIGHT -> "Light"
+                                AppThemeSetting.DARK -> "Dark"
+                                AppThemeSetting.ASGL -> "ASGL Atmosphere"
+                            }
+                            FilterChip(
+                                selected = settings.theme == themeOption,
+                                onClick = { settingsRepository.updateTheme(themeOption) },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                    Text("Liquid Glass Translucency", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Adjust tactile transparency of floating bars and sheets",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        AppThemeSetting.values().forEach { themeOption ->
+                        listOf(
+                            0.40f to "Near-Clear",
+                            0.75f to "Balanced",
+                            0.92f to "Near-Opaque"
+                        ).forEach { (value, name) ->
                             FilterChip(
-                                selected = settings.theme == themeOption,
-                                onClick = { settingsRepository.updateTheme(themeOption) },
-                                label = { Text(themeOption.name.lowercase().replaceFirstChar { it.uppercase() }) }
+                                selected = kotlin.math.abs(settings.glassTransparency - value) < 0.08f,
+                                onClick = { settingsRepository.updateGlassTransparency(value) },
+                                label = { Text(name) }
                             )
                         }
                     }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                    SettingsSwitchRow(
+                        title = "Reduce Transparency",
+                        subtitle = "Fall back to solid opaque surfaces for accessibility",
+                        checked = settings.reduceTransparency,
+                        onCheckedChange = { settingsRepository.updateReduceTransparency(it) }
+                    )
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
